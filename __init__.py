@@ -7,23 +7,6 @@
 # Revision: 1
 # (c) 2013 Hewlett-Packard Company. All Rights Reserved
 
-import util
-import json
-from os.path import isfile, dirname, basename, join, abspath
-from pprint import pprint, pformat
-from copy import copy, deepcopy
-import re
-import random
-import time
-import logging
-from __builtin__ import True
-
-# Custom exceptions used internally for this class
-class FlowError(Exception):
-    def __init__(self, message):
-        self.message = message
-
-
 ''' jcf class
 implements core
 JCF represents a Job Configuration File -- the raw data without any special
@@ -46,6 +29,24 @@ jcf.save()
   or
 jcf.save(new_file)
 '''
+
+
+import json
+from os.path import isfile, dirname, basename, join, abspath
+from pprint import pprint, pformat
+from copy import copy, deepcopy
+import re
+import random
+import time
+import logging
+
+from .. import util
+
+
+# Custom exceptions used internally for this class
+class FlowError(Exception):
+    def __init__(self, message):
+        self.message = message
 
 
 class JCF(object):
@@ -1701,10 +1702,17 @@ class JCF(object):
             if s in self.stages:
                 del self.stages[s]
 
-# Utility class functions for use with modules
 
 # TODO: Rename Module to something else--the term is overloaded and not accurate in this case
+#
+# it's added w/ commit 9e28ba19801dd90f2d29d999487c64b64929
+# used on :path:`module/*.py`
+# not imported directly
+# try :cmd:`grep -r '\.Module'`
 class Module(JCF):
+    """
+    Utility class functions for use with modules
+    """
 
     def __init__(self, leader_file):
         leader_file = abspath(leader_file)
