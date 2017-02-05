@@ -16,6 +16,98 @@ SCHEMA_FOLDER = pjoin(pdir(__file__), SCHEMA_FOLDER_NAME)
 class VersionNumberError(Exception): pass
 
 
+def get_item(json_obj, keys):
+    """
+    get item of JSON format Python object by given keys
+
+    >>> json_obj = {
+    ...     "stages": [
+    ...         {
+    ...             "action": {
+    ...                 "files": [
+    ...                     [
+    ...                         "${ckey.copy_src}",
+    ...                         "${ckey.copy_dst}"
+    ...                     ]
+    ...                 ],
+    ...             },
+    ...         }
+    ...     ]
+    ... }
+    >>> get_item(json_obj, ('stages', 0, 'action'))
+    {'files': [['${ckey.copy_src}', '${ckey.copy_dst}']]}
+    >>> get_item("...", ())
+    '...'
+    """
+    from functools import reduce
+    return reduce(lambda x,y:x.__getitem__(y), keys, json_obj)
+
+
+def walk(json_obj, keys=()):
+    r"""
+    walk through all values of JSON format Python object,
+    yield keys/value pair
+
+    >>> json_obj = {
+    ...     "A": {"B": 1, "C": 2},
+    ...     "D": [3, 4, {"E": 5}],
+    ...     "F": 6
+    ...     }
+    >>> W = walk(json_obj)
+    >>> sorted(W)
+    [(('A', 'B'), 1), (('A', 'C'), 2), (('D', 0), 3), (('D', 1), 4), (('D', 2, 'E'), 5), (('F',), 6)]
+    >>> all(get_item(json_obj, ks)==v for ks, v in W)
+    True
+
+    >>> json_obj = {
+    ...     "stages": {
+    ...         "CopyFiles": {
+    ...             "action": {
+    ...                 "files": [
+    ...                     [
+    ...                         "${ckey.copy_src}",
+    ...                         "${ckey.copy_dst}"
+    ...                     ]
+    ...                 ],
+    ...             },
+    ...         }
+    ...     },
+    ...     "local": {
+    ...         "copy_files_2169799175": {
+    ...             "copy_dst": "/tmp",
+    ...             "copy_src": "/home"
+    ...         }
+    ...     },
+    ... }
+    >>> W = walk(json_obj)
+    >>> sorted(W)
+    [(('local', 'copy_files_2169799175', 'copy_dst'), '/tmp'), (('local', 'copy_files_2169799175', 'copy_src'), '/home'), (('stages', 'CopyFiles', 'action', 'files', 0, 0), '${ckey.copy_src}'), (('stages', 'CopyFiles', 'action', 'files', 0, 1), '${ckey.copy_dst}')]
+    """
+    if isinstance(json_obj, dict):
+        for k,v in json_obj.items():
+            #yield from walk(v, keys+(k,))
+            for r in walk(v, keys+(k,)): yield r
+    elif isinstance(json_obj, list):
+        for i,v in enumerate(json_obj):
+            #yield from walk(v, keys+(i,))
+            for r in walk(v, keys+(i,)): yield r
+    else:
+        yield (keys, json_obj)
+
+
+def ckeys(json_obj):
+    r"""
+    >>> tuple(ckeys({'A': {'B': '${ckey.A.C}', 'C': 0}, 'D': 1}))
+    (['A', 'C'],)
+    """
+    ckey_patt = re.compile(r'^\${ckey\.(.*)}$')
+    for ks, v in walk(json_obj):
+        if isinstance(v, str):
+            m = ckey_patt.match(v)
+            if m:
+                yield m.group(1).split('.')
+
+
 def unify_rule_version(version):
     r"""
     unify version number from "a.b.c" to "a_b_c"
