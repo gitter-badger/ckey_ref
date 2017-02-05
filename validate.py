@@ -292,6 +292,18 @@ def check_ckey_ref(target):
         list of [string | number ], or [string | number] within a dictionary:
         ${ckey.copy_dst}
     """
+    # 0. error types flow::
+    #      recursion search ✗ → not exist ✗
+    #                         → infinite recursion ✗
+    #                       ✓ → type error ✗
+    #                         → ✓
+    # 1. find first error then stop / find all
+    #    - create iter
+    #    - seperate "report" and "find error" with customized exception
+    # 2. abs ckey keys / only closest key
+    #    - abs → foldl
+    #    - closest → create index
+    # 3. ckey, ckey-template, ...?
     return {'pass': True, 'report': ''}
 
 
