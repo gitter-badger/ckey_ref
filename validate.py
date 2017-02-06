@@ -16,98 +16,6 @@ SCHEMA_FOLDER = pjoin(pdir(__file__), SCHEMA_FOLDER_NAME)
 class VersionNumberError(Exception): pass
 
 
-def get_item(json_obj, keys):
-    """
-    get item of JSON format Python object by given keys
-
-    >>> json_obj = {
-    ...     "stages": [
-    ...         {
-    ...             "action": {
-    ...                 "files": [
-    ...                     [
-    ...                         "${ckey.copy_src}",
-    ...                         "${ckey.copy_dst}"
-    ...                     ]
-    ...                 ],
-    ...             },
-    ...         }
-    ...     ]
-    ... }
-    >>> get_item(json_obj, ('stages', 0, 'action'))
-    {'files': [['${ckey.copy_src}', '${ckey.copy_dst}']]}
-    >>> get_item("...", ())
-    '...'
-    """
-    from functools import reduce
-    return reduce(lambda x,y:x.__getitem__(y), keys, json_obj)
-
-
-def walk(json_obj, keys=()):
-    r"""
-    walk through all values of JSON format Python object,
-    yield keys/value pair
-
-    >>> json_obj = {
-    ...     "A": {"B": 1, "C": 2},
-    ...     "D": [3, 4, {"E": 5}],
-    ...     "F": 6
-    ...     }
-    >>> W = walk(json_obj)
-    >>> sorted(W)
-    [(('A', 'B'), 1), (('A', 'C'), 2), (('D', 0), 3), (('D', 1), 4), (('D', 2, 'E'), 5), (('F',), 6)]
-    >>> all(get_item(json_obj, ks)==v for ks, v in W)
-    True
-
-    >>> json_obj = {
-    ...     "stages": {
-    ...         "CopyFiles": {
-    ...             "action": {
-    ...                 "files": [
-    ...                     [
-    ...                         "${ckey.copy_src}",
-    ...                         "${ckey.copy_dst}"
-    ...                     ]
-    ...                 ],
-    ...             },
-    ...         }
-    ...     },
-    ...     "local": {
-    ...         "copy_files_2169799175": {
-    ...             "copy_dst": "/tmp",
-    ...             "copy_src": "/home"
-    ...         }
-    ...     },
-    ... }
-    >>> W = walk(json_obj)
-    >>> sorted(W)
-    [(('local', 'copy_files_2169799175', 'copy_dst'), '/tmp'), (('local', 'copy_files_2169799175', 'copy_src'), '/home'), (('stages', 'CopyFiles', 'action', 'files', 0, 0), '${ckey.copy_src}'), (('stages', 'CopyFiles', 'action', 'files', 0, 1), '${ckey.copy_dst}')]
-    """
-    if isinstance(json_obj, dict):
-        for k,v in json_obj.items():
-            #yield from walk(v, keys+(k,))
-            for r in walk(v, keys+(k,)): yield r
-    elif isinstance(json_obj, list):
-        for i,v in enumerate(json_obj):
-            #yield from walk(v, keys+(i,))
-            for r in walk(v, keys+(i,)): yield r
-    else:
-        yield (keys, json_obj)
-
-
-def ckeys(json_obj):
-    r"""
-    >>> tuple(ckeys({'A': {'B': '${ckey.A.C}', 'C': 0}, 'D': 1}))
-    (['A', 'C'],)
-    """
-    ckey_patt = re.compile(r'^\${ckey\.(.*)}$')
-    for ks, v in walk(json_obj):
-        if isinstance(v, str):
-            m = ckey_patt.match(v)
-            if m:
-                yield m.group(1).split('.')
-
-
 def unify_rule_version(version):
     r"""
     unify version number from "a.b.c" to "a_b_c"
@@ -165,145 +73,21 @@ def get_schema_path(version):
     return abspath(pjoin(SCHEMA_FOLDER, version, MAIN_SCHEMA))
 
 
-def check_sematic(target, schema):
+def check_schema(target, schema):
     """
+    TBC
+
     return {'pass': True/False, 'report': obj}
     """
     return {'pass': True, 'report': ''}
 
 
-def check_ckey_ref(target):
+def check_variable(target):
     """
-    :type target: parsed JSON object
-    :return: {'pass': True/False, 'report': obj}
+    TBC
 
-    ckey reference constraint
-    ========================================
-
-    1. Referenced values must exist.
-
-        >>> jcf = {
-        ...     "stages": {
-        ...         "CopyFiles": {
-        ...             "action": {
-        ...                 "files": [
-        ...                     [
-        ...                         "${ckey.copy_src}",
-        ...                         "${ckey.copy_dst}"
-        ...                     ]
-        ...                 ],
-        ...             },
-        ...         }
-        ...     },
-        ...     "local": {
-        ...         "copy_files_2169799175": {
-        ...             "copy_dst": "/tmp",
-        ...             "copy_src": "/home"
-        ...         }
-        ...     },
-        ... }
-        >>> check_ckey_ref(jcf)['pass']
-        True
-
-        >>> jcf = {
-        ...     "stages": {
-        ...         "CopyFiles": {
-        ...             "action": {
-        ...                 "files": [
-        ...                     [
-        ...                         "${ckey.copy_src}",
-        ...                         "${ckey.copy_dst}"
-        ...                     ]
-        ...                 ],
-        ...             },
-        ...         }
-        ...     },
-        ...     "local": {
-        ...         "copy_files_2169799175": {
-        ...             # "copy_dst": "/tmp",
-        ...             "copy_src": "/home"
-        ...         }
-        ...     },
-        ... }
-        >>> result = check_ckey_ref(jcf)
-        >>> result['pass']
-        False
-
-        #>>> result['report']
-        Missing ckey when try to reference the following:
-            ${ckey.copy_dst}
-
-    2. Recursive referencing is not allowed.
-
-        >>> jcf = {
-        ...     "stages": {
-        ...         "CopyFiles": {
-        ...             "action": {
-        ...                 "files": [
-        ...                     [
-        ...                         "${ckey.copy_src}",
-        ...                         "${ckey.copy_dst}"
-        ...                     ]
-        ...                 ],
-        ...             },
-        ...         }
-        ...     },
-        ...     "local": {
-        ...         "copy_files_2169799175": {
-        ...             "copy_dst": "${ckey.recursive}",
-        ...             "copy_src": "/home"
-        ...         }
-        ...     },
-        ...     "ckey": {
-        ...         "recursive": "${ckey.copy_dst}"
-        ...     }
-        ... }
-
-        #>>> check_ckey_ref(jcf)['report']
-        The following referencing routes turn out to be recursive:
-            ${ckey.copy_dst} => ${ckey.recursive} => ${ckey.copy_dst}
-
-    3. Referenced value can only be string, number, list of [string | number], or
-       [string | number] within a dictionary.
-
-        >>> jcf = {
-        ...     "stages": {
-        ...         "CopyFiles": {
-        ...             "action": {
-        ...                 "files": [
-        ...                     [
-        ...                         "${ckey.copy_src}",
-        ...                         "${ckey.copy_dst}"
-        ...                     ]
-        ...                 ],
-        ...             },
-        ...         }
-        ...     },
-        ...     "local": {
-        ...         "copy_files_2169799175": {
-        ...             "copy_dst": {"recursive_dictionary": {"so": {"recursive": "!"}}},
-        ...             "copy_src": "/home"
-        ...         }
-        ...     },
-        ... }
-
-        #>>> check_ckey_ref(jcf)['report']
-        The values of the following key does not fall into string, number,
-        list of [string | number ], or [string | number] within a dictionary:
-        ${ckey.copy_dst}
+    return {'pass': True/False, 'report': obj}
     """
-    # 0. error types flow::
-    #      recursion search ✗ → not exist ✗
-    #                         → infinite recursion ✗
-    #                       ✓ → type error ✗
-    #                         → ✓
-    # 1. find first error then stop / find all
-    #    - create iter
-    #    - seperate "report" and "find error" with customized exception
-    # 2. abs ckey keys / only closest key
-    #    - abs → foldl
-    #    - closest → create index
-    # 3. ckey, ckey-template, ...?
     return {'pass': True, 'report': ''}
 
 
@@ -322,6 +106,6 @@ def is_valid_jcf(jcf_path, version=None):
     target = json.load(open(jcf_path))
 
     return all((
-        check_sematic(target, schema)['pass'],
-        check_ckey_ref(target)['pass'],
+        check_schema(target, schema)['pass'],
+        check_variable(target)['pass'],
         ))
