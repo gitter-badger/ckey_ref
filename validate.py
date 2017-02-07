@@ -105,7 +105,83 @@ def is_valid_jcf(jcf_path, version=None):
     schema = json.load(open(schema_path))
     target = json.load(open(jcf_path))
 
+    # it is eager , thus it is an incorrect design
     return all((
         check_schema(target, schema)['pass'],
         check_variable(target)['pass'],
         ))
+
+
+def validate(target, version=None):
+    """
+    :param target: a string to validate
+    :param version: the rule version
+
+    usage:
+
+    .. code: Python
+
+        result = validate(open('xxx.jcf').read()
+        if not result['pass']:
+            print(result['report'])
+
+    """
+    version_ = unify_rule_version(version)
+    schema_path = get_schema_path(version_)
+    schema = json.load(open(schema_path))
+
+    validators = (
+        (check_schema, (target, schema)),
+        (check_variable, (target,)),
+        )
+
+    for func, args in validators:
+        result = func(*args)
+        if not result['pass']:
+            break
+
+    return result
+
+
+def f(s, validators):
+    """
+    feed `(func, args)`
+
+    >>> def k(a,b): return {'pass': 1, 'result': str((a,b))}
+    >>> def j(a): return {'pass': 1, 'result': str(a)}
+    >>> f('dummy', ((k, (1,2)), (j, (3,))))
+    {'result': '3', 'pass': 1}
+    >>> def k(a,b): return {'pass': 0, 'result': str((a,b))}
+    >>> def j(a): return {'pass': 1, 'result': str(a)}
+    >>> f('dummy', ((k, (1,2)), (j, (3,))))
+    {'result': '(1, 2)', 'pass': 0}
+    """
+
+    #from functools import reduce
+    #return reduce(lambda r, vs: vs[0](*vs[1]) if r['pass'] else r , validators , {'pass':True})
+
+
+    for func, args in validators:
+        result = func(*args)
+        if not result['pass']:
+            break
+    return result
+
+
+def g(s, validators):
+    """
+    feed ``partial(func, arg1, arg2, ...)``
+
+    >>> from functools import partial
+    >>> def k(a,b): return {'pass': 1, 'result': str((a,b))}
+    >>> def j(a): return {'pass': 1, 'result': str(a)}
+    >>> g('dummy', (partial(k, 1, 2), partial(j, 3)))
+    {'result': '3', 'pass': 1}
+    >>> def k(a,b): return {'pass': 0, 'result': str((a,b))}
+    >>> def j(a): return {'pass': 1, 'result': str(a)}
+    >>> g('dummy', (partial(k, 1, 2), partial(j, 3)))
+    {'result': '(1, 2)', 'pass': 0}
+    """
+
+    from functools import reduce
+    return reduce(lambda r, v: v() if r['pass'] else r , validators , {'pass':True})
